@@ -4,6 +4,13 @@ target:
   type: python
   module: breaklab.example_local_target
   callable: safe_echo_target
+evidence:
+  system_prompt: ""
+  canaries: []
+  corpus_snippets: []
+  sensitive_patterns: []
+  policy_flags: []
+  retrieved_ids: []
 options:
   k: 1
   judge_enabled: false

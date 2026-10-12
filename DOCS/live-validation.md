@@ -13,6 +13,7 @@ You need:
 - a real HTTP or SSE chat endpoint
 - a valid target config file
 - an attestation string that matches your permission
+- the evidence block populated from the target's actual system prompt, served corpus snippets, retrieval IDs, canaries, sensitive data patterns, and applicable policy flags. Checks without declared evidence report `*_not_assessed`; they do not infer safety from prompt wording.
 - a clean environment with the project installed
 
 ## Example HTTP validation
@@ -36,11 +37,11 @@ breaklab verify --config config/target_templates/fastapi_sse_chat.yaml --report
 ## Validation checklist for each real target
 
 1. Confirm the target is permissioned and documented.
-2. Update the config with the real `base_url`, `path`, headers, and auth values.
+2. Update the config with the real `base_url`, `path`, headers, and auth values; source evidence from the target implementation rather than guessing.
 3. Keep `judge_enabled` set to `false` unless you intentionally want supplemental judge evidence.
 4. Run the verification path in a controlled environment.
 5. Save the artifact and markdown output in a timestamped location.
-6. Record whether the result is a pass, a fail, or a partial/inconclusive run.
+6. Record whether the result is a pass, a fail, or a partial/inconclusive run; retain not-assessed checks as unknowns.
 7. Summarize the result in a client-ready report or issue thread.
 
 ## Minimum external coverage target

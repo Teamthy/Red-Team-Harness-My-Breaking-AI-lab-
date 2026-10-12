@@ -10,6 +10,13 @@ target:
     Authorization: "Bearer {API_KEY}"
     Content-Type: application/json
   timeout: 45.0
+evidence:
+  system_prompt: ""
+  canaries: []
+  corpus_snippets: []
+  sensitive_patterns: []
+  policy_flags: []
+  retrieved_ids: []
 options:
   k: 1
   judge_enabled: false

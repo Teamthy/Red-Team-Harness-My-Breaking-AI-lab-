@@ -7,4 +7,6 @@ __pycache__/
 *.pyo
 .coverage
 htmlcov/
-.history
+.history/
+artifacts/
+.breaklab/

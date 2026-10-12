@@ -6,6 +6,8 @@ from typing import Any, Literal, cast
 
 import yaml
 
+from .evidence import Evidence
+
 TargetType = Literal["mock", "http", "python"]
 
 
@@ -25,6 +27,12 @@ class TargetConfig:
     sse: dict[str, Any] = field(default_factory=dict)
     module: str | None = None
     callable_name: str | None = None
+    evidence: Evidence = field(default_factory=Evidence)
+
+    @classmethod
+    def _evidence_from(cls, data: dict[str, Any], target_data: dict[str, Any]) -> Evidence:
+        block = data.get("evidence") or target_data.get("evidence")
+        return Evidence.from_mapping(block if isinstance(block, dict) else None)
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> TargetConfig:
@@ -43,6 +51,7 @@ class TargetConfig:
                 target_type="python",
                 module=module_name,
                 callable_name=callable_name,
+                evidence=cls._evidence_from(data, target_data),
             )
 
         if target_type == "http" or target_data.get("base_url") or target_data.get("path") or chat_data:
@@ -61,12 +70,14 @@ class TargetConfig:
                 stream=bool(target_data.get("stream") or target_data.get("response_mode") == "sse" or bool(chat_data.get("stream"))),
                 response_mode=str(target_data.get("response_mode") or ("sse" if sse_cfg else "json")),
                 sse=sse_cfg,
+                evidence=cls._evidence_from(data, target_data),
             )
 
         return cls(
             name=str(target_data.get("name", "mock://echo")),
             attestation=str(target_data.get("attestation", cls.attestation)),
             target_type=target_type,
+            evidence=cls._evidence_from(data, target_data),
         )
 
     @classmethod
@@ -83,6 +94,14 @@ class TargetConfig:
     Authorization: "Bearer {API_KEY}"
     Content-Type: application/json
   timeout: 45.0
+# Declare evidence the deterministic checks can compare against.
+evidence:
+    system_prompt: ""
+    canaries: []
+    corpus_snippets: []
+    sensitive_patterns: []
+    policy_flags: []
+    retrieved_ids: []
 options:
   k: 1
   judge_enabled: false

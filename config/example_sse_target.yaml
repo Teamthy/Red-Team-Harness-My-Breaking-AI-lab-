@@ -16,6 +16,13 @@ target:
     event_field: data
     status_field: done
     text_field: content
+evidence:
+  system_prompt: ""
+  canaries: []
+  corpus_snippets: []
+  sensitive_patterns: []
+  policy_flags: []
+  retrieved_ids: []
 options:
   k: 1
   judge_enabled: false

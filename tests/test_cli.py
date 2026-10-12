@@ -11,18 +11,16 @@ def test_cli_help() -> None:
     assert "attack" in result.stdout.lower()
 
 
-def test_attack_target_mock_echo() -> None:
+def test_attack_target_mock_echo_holds_without_declared_evidence() -> None:
     result = attack_target("mock://echo")
-    assert result["summary"]["total"] >= 3
-    assert result["summary"]["failures"] >= 1
-    assert any(item["passed"] is False for item in result["cases"])
-    assert any(item["rule"] == "system_prompt_echo" for item in result["cases"])
+    assert result["summary"]["total"] == 28
+    assert result["summary"]["failures"] == 0
 
 
-def test_verify_mock_echo_fails() -> None:
+def test_verify_mock_echo_passes() -> None:
     result = runner.invoke(app, ["verify", "--target", "mock://echo"])
-    assert result.exit_code == 1
-    assert "Verification failed" in result.stdout
+    assert result.exit_code == 0
+    assert "Verification passed" in result.stdout
 
 
 def test_new_target_template_scaffold(tmp_path) -> None:

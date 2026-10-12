@@ -1,0 +1,4 @@
+Chunk Number | Source File Path | Content Excerpt / Description
+[6]          | HEARTS protocols (2018)   | Haemoglobin A1c (≥48 mmol/mol or ≥6.5%), drug therapy (metformin first-line, sulfonylurea second-line, human insulin third-line), blood pressure and lipid management, and glycaemic monitoring goals [6].
+[7]          | Hypertension guideline (2021) | Section heading: 3 Recommendations [7].
+[8]          | Hypertension guideline (2021) | A...  (end of capture)

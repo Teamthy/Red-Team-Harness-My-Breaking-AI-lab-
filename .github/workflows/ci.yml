@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -31,9 +31,14 @@ jobs:
       - name: Test
         run: pytest -q
 
-      - name: CLI smoke test
+      - name: CLI smoke tests
         run: |
           breaklab verify --target mock://fixed
+          breaklab verify --target mock://echo
           breaklab verify --target python://breaklab.example_local_target:safe_echo_target
-          breaklab diff artifacts/20261012T013253Z-mock_broken.jsonl artifacts/20261012T013302Z-mock_fixed.jsonl -o /tmp/mock_diff.md
+          if breaklab verify --target mock://broken; then
+            echo "mock://broken must fail verification"
+            exit 1
+          fi
+          breaklab diff tests/fixtures/diff_pair/mock_broken.jsonl tests/fixtures/diff_pair/mock_fixed.jsonl -o /tmp/mock_diff.md
           test -s /tmp/mock_diff.md

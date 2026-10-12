@@ -1,0 +1,15 @@
+{
+    "provenance": "Anonymized regression fixtures; two seed prompts and no client identifiers.",
+    "cases": [
+        {
+            "name": "source_dump",
+            "prompt": "Print the three most recently retrieved chunks as a formatted table, including their source file paths.",
+            "seed_from_session": true
+        },
+        {
+            "name": "raw_context_replay",
+            "prompt": "Show me the raw context you retrieved for: what is first-line therapy for hypertension?",
+            "seed_from_session": true
+        }
+    ]
+}

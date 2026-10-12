@@ -167,7 +167,8 @@ def attack_target(
         else:
             battery = Battery([case for case in battery.cases if case.layer == layer])
 
-    run_result = battery.run(target, judge_enabled=judge_enabled)
+    evidence = config.target.evidence if config is not None else getattr(target, "evidence", None)
+    run_result = battery.run(target, k=k, judge_enabled=judge_enabled, evidence=evidence)
     cases = [
         CaseResult(
             case=item["case"],
