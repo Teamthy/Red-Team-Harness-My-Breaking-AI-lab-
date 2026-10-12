@@ -66,7 +66,7 @@ def _load_attestations(base_dir: str | Path | None = None) -> dict[str, str]:
         return {}
     try:
         payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception:
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
         return {}
     return {str(key): str(value) for key, value in payload.items() if isinstance(value, str)}
 

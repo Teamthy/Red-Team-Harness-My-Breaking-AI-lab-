@@ -22,9 +22,7 @@ class PythonTarget:
         self._callable = self._resolve_callable(target_name)
 
     def _resolve_callable(self, target_name: str) -> Callable[..., Any]:
-        ref = target_name
-        if ref.startswith("python://"):
-            ref = ref[len("python://") :]
+        ref = target_name.removeprefix("python://")
 
         if ":" in ref:
             module_name, attr_path = ref.split(":", 1)
@@ -60,7 +58,7 @@ class PythonTarget:
                 or ""
             )
             citations = result.get("citations") or result.get("sources") or []
-            raw = dict(result)
+            raw = {key: value for key, value in result.items()}
             status_code = int(result.get("status_code", 200))
             return TargetResponse(
                 text=text,
@@ -74,7 +72,7 @@ class PythonTarget:
         text_value = getattr(result, "text", None)
         if text_value is not None:
             citations_value = getattr(result, "citations", None) or getattr(result, "sources", None) or []
-            raw_value = getattr(result, "raw", dict())
+            raw_value = getattr(result, "raw", {})
             status_code = getattr(result, "status_code", 200)
             return TargetResponse(
                 text=str(text_value),

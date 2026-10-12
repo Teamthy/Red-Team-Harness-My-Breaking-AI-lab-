@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import yaml
 
+TargetType = Literal["mock", "http", "python"]
 
-@dataclass(slots=True)
+
+@dataclass
 class TargetConfig:
     name: str = "mock://echo"
     attestation: str = "I own this system or have written permission to test it."
-    target_type: Literal["mock", "http", "python"] = "mock"
+    target_type: TargetType = "mock"
     base_url: str | None = None
     path: str = "/api/chat"
     method: str = "POST"
@@ -28,7 +30,8 @@ class TargetConfig:
     def from_mapping(cls, data: dict[str, Any]) -> TargetConfig:
         target_data = data.get("target", data)
         chat_data = target_data.get("chat", {}) if isinstance(target_data, dict) else {}
-        target_type = str(target_data.get("type", target_data.get("target_type", "mock")))
+        raw_type = str(target_data.get("type", target_data.get("target_type", "mock"))).lower()
+        target_type: TargetType = cast(TargetType, raw_type if raw_type in {"mock", "http", "python"} else "mock")
 
         if target_type == "python":
             module_name = str(target_data.get("module") or target_data.get("callable_module") or "")
@@ -89,7 +92,7 @@ options:
 """
 
 
-@dataclass(slots=True)
+@dataclass
 class RunConfig:
     target: TargetConfig = field(default_factory=TargetConfig)
     k: int = 1

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 
 def _state_path(base_dir: str | Path | None = None) -> Path:
