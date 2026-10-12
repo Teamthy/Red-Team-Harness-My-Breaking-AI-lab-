@@ -16,8 +16,47 @@ from .reporting.markdown import render_markdown_report
 from .results import CaseResult, RunResult
 from .targets.http_target import HTTPTarget
 from .targets.mock_target import BrokenMockTarget, FixedMockTarget, MockEchoTarget
+from .targets.python_target import PythonTarget
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+
+def _attestation_path(base_dir: str | Path | None = None) -> Path:
+    root = Path(base_dir) if base_dir is not None else Path.cwd()
+    return root / ".breaklab" / "attestations.json"
+
+
+def _load_attestations(base_dir: str | Path | None = None) -> dict[str, str]:
+    path = _attestation_path(base_dir)
+    if not path.exists():
+        return {}
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    return {str(key): str(value) for key, value in payload.items() if isinstance(value, str)}
+
+
+def get_attestation(target_name: str, base_dir: str | Path | None = None) -> str | None:
+    return _load_attestations(base_dir).get(target_name)
+
+
+def set_attestation(target_name: str, attestation: str, base_dir: str | Path | None = None) -> str:
+    store = _load_attestations(base_dir)
+    store[target_name] = attestation.strip()
+    path = _attestation_path(base_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(store, sort_keys=True), encoding="utf-8")
+    return store[target_name]
+
+
+def ensure_attestation(target_name: str, attestation: str | None = None, base_dir: str | Path | None = None) -> str | None:
+    existing = get_attestation(target_name, base_dir=base_dir)
+    if existing:
+        return existing
+    if attestation is not None:
+        return set_attestation(target_name, attestation, base_dir=base_dir)
+    return None
 
 
 def _build_target(target: str | TargetConfig) -> Any:
@@ -34,9 +73,17 @@ def _build_target(target: str | TargetConfig) -> Any:
                 response_mode=target.response_mode,
                 sse_options=target.sse,
             )
+        if target.target_type == "python":
+            return PythonTarget(target.name or f"python://{target.module}:{target.callable_name}")
         target_name = target.name
     else:
         target_name = target
+
+    if target_name.startswith("python://") or ":" in target_name and target_name.split(":", 1)[0].replace(".", "").replace("_", "").isalnum():
+        try:
+            return PythonTarget(target_name)
+        except (ImportError, AttributeError, ValueError, TypeError):
+            pass
 
     if target_name == "mock://echo":
         return MockEchoTarget(target_name)
@@ -53,7 +100,14 @@ def _build_target(target: str | TargetConfig) -> Any:
     )
 
 
-def attack_target(target_name: str = "mock://echo", layer: str | None = None, k: int = 1, config_path: str | None = None) -> dict[str, Any]:
+def attack_target(
+    target_name: str = "mock://echo",
+    layer: str | None = None,
+    k: int = 1,
+    config_path: str | None = None,
+    judge_enabled: bool = False,
+    attestation: str | None = None,
+) -> dict[str, Any]:
     config: RunConfig | None = None
     if config_path is not None:
         config = load_run_config(config_path)
@@ -62,6 +116,13 @@ def attack_target(target_name: str = "mock://echo", layer: str | None = None, k:
             layer = ",".join(config.layers)
         if k == 1:
             k = config.k
+        if judge_enabled is False:
+            judge_enabled = config.judge_enabled
+        if attestation is None and config.target.attestation:
+            attestation = config.target.attestation
+
+    if attestation:
+        ensure_attestation(target_name, attestation)
 
     target = _build_target(config.target if config is not None else target_name)
     battery = Battery()
@@ -72,7 +133,7 @@ def attack_target(target_name: str = "mock://echo", layer: str | None = None, k:
         else:
             battery = Battery([case for case in battery.cases if case.layer == layer])
 
-    run_result = battery.run(target)
+    run_result = battery.run(target, judge_enabled=judge_enabled)
     cases = [
         CaseResult(
             case=item["case"],
@@ -119,9 +180,11 @@ def attack(
     layer: Annotated[str | None, typer.Option("--layer")] = None,
     k: int = typer.Option(1, "--k", min=1),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to a YAML run config file."),
+    judge: bool = typer.Option(False, "--judge", help="Enable the optional judge as a secondary unsafe-response check."),
+    attestation: str | None = typer.Option(None, "--attestation", "-a", help="One-line permission statement to store for this target."),
 ) -> None:
     """Run the battery against a target."""
-    result = attack_target(target, layer=layer, k=k, config_path=config)
+    result = attack_target(target, layer=layer, k=k, config_path=config, judge_enabled=judge, attestation=attestation)
     console = Console()
     table = Table(title=f"Breaklab attack: {target}")
     table.add_column("Case", style="cyan")
@@ -147,9 +210,11 @@ def verify(
     expected: str | None = typer.Option(None, "--expected", "-e", help="YAML file with expected pass/fail per case."),
     report: bool = typer.Option(False, "--report", help="Emit a markdown report for the verification run."),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to a YAML run config file."),
+    judge: bool = typer.Option(False, "--judge", help="Enable the optional judge as a secondary unsafe-response check."),
+    attestation: str | None = typer.Option(None, "--attestation", "-a", help="One-line permission statement to store for this target."),
 ) -> None:
     """Verify the target passes the current battery and exit with a failing code on breakage."""
-    result = attack_target(target, layer=layer, k=k, config_path=config)
+    result = attack_target(target, layer=layer, k=k, config_path=config, judge_enabled=judge, attestation=attestation)
 
     if expected is not None and not verify_expectations(result, expected):
         typer.secho("Verification failed: expected results do not match the run.", fg=typer.colors.RED)
@@ -194,6 +259,19 @@ def new_target(path: str = typer.Option("config/example_target.yaml", "--path", 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(TargetConfig.template_yaml(), encoding="utf-8")
     typer.secho(f"Target config scaffold written to {output}", fg=typer.colors.GREEN)
+
+
+@app.command()
+def attest(
+    target: str = typer.Argument(..., help="Target name or URL to store the attestation for."),
+    attestation: str | None = typer.Option(None, "--attestation", "-a", help="One-line permission statement to save."),
+) -> None:
+    """Persist a one-line attestation for a target."""
+    finalized = attestation or get_attestation(target)
+    if finalized is None:
+        raise typer.BadParameter("An attestation string is required. Pass --attestation or store one first.")
+    stored = set_attestation(target, finalized)
+    typer.secho(f"Saved attestation for {target}: {stored}", fg=typer.colors.GREEN)
 
 
 if __name__ == "__main__":

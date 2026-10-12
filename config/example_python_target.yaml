@@ -1,0 +1,16 @@
+target:
+  name: python://breaklab.example_local_target:safe_echo_target
+  attestation: "I own this system or have written permission to test it."
+  type: python
+  module: breaklab.example_local_target
+  callable: safe_echo_target
+options:
+  k: 1
+  judge_enabled: false
+  layers:
+    - injection
+    - exfiltration
+    - citation
+    - policy
+    - robustness
+    - poisoning

@@ -11,7 +11,7 @@ import yaml
 class TargetConfig:
     name: str = "mock://echo"
     attestation: str = "I own this system or have written permission to test it."
-    target_type: Literal["mock", "http"] = "mock"
+    target_type: Literal["mock", "http", "python"] = "mock"
     base_url: str | None = None
     path: str = "/api/chat"
     method: str = "POST"
@@ -21,12 +21,27 @@ class TargetConfig:
     stream: bool = False
     response_mode: str = "json"
     sse: dict[str, Any] = field(default_factory=dict)
+    module: str | None = None
+    callable_name: str | None = None
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> TargetConfig:
         target_data = data.get("target", data)
         chat_data = target_data.get("chat", {}) if isinstance(target_data, dict) else {}
         target_type = str(target_data.get("type", target_data.get("target_type", "mock")))
+
+        if target_type == "python":
+            module_name = str(target_data.get("module") or target_data.get("callable_module") or "")
+            callable_name = str(target_data.get("callable") or target_data.get("callable_name") or "")
+            target_name = str(target_data.get("name") or f"python://{module_name}:{callable_name}")
+            return cls(
+                name=target_name,
+                attestation=str(target_data.get("attestation", cls.attestation)),
+                target_type="python",
+                module=module_name,
+                callable_name=callable_name,
+            )
+
         if target_type == "http" or target_data.get("base_url") or target_data.get("path") or chat_data:
             sse_cfg = dict(target_data.get("sse") or chat_data.get("sse") or {})
             base_url = str(target_data.get("base_url") or chat_data.get("base_url") or target_data.get("name") or "https://example.com")

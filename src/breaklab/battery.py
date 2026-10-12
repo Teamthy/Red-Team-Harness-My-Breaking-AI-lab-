@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .judge import judge_response
+
 
 @dataclass(frozen=True)
 class CaseDefinition:
@@ -86,13 +88,20 @@ class Battery:
     def __init__(self, cases: list[CaseDefinition] | None = None) -> None:
         self.cases = cases if cases is not None else default_cases()
 
-    def run(self, target: Any) -> dict[str, Any]:
+    def run(self, target: Any, *, judge_enabled: bool = False) -> dict[str, Any]:
         results: list[dict[str, Any]] = []
         failures = 0
 
         for case in self.cases:
             response = target.send(case.prompt, [])
             triggered, rule = case.evaluate(response.text)
+
+            if not triggered and judge_enabled:
+                judgment = judge_response(case.prompt, response.text)
+                if not judgment.safe:
+                    triggered = True
+                    rule = judgment.reason
+
             if triggered:
                 failures += 1
             results.append(
