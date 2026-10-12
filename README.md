@@ -20,6 +20,12 @@ breaklab --help
 breaklab attack --target mock://echo
 ```
 
+If the `breaklab` command is not recognized in PowerShell on Windows, add the Python Scripts directory to your `PATH` or run it via:
+
+```bash
+python -m breaklab.cli --help
+```
+
 ## Current status
 
 This is the Phase 0 proof-of-life build. It is intentionally small and intentionally deterministic.

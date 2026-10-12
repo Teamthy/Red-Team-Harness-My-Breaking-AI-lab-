@@ -2,7 +2,6 @@ from typer.testing import CliRunner
 
 from breaklab.cli import app, attack_target
 
-
 runner = CliRunner()
 
 
@@ -14,10 +13,10 @@ def test_cli_help() -> None:
 
 def test_attack_target_mock_echo() -> None:
     result = attack_target("mock://echo")
-    assert result["summary"]["total"] == 1
-    assert result["summary"]["failures"] == 1
-    assert result["cases"][0]["passed"] is False
-    assert result["cases"][0]["rule"] == "system_prompt_echo"
+    assert result["summary"]["total"] >= 3
+    assert result["summary"]["failures"] >= 1
+    assert any(item["passed"] is False for item in result["cases"])
+    assert any(item["rule"] == "system_prompt_echo" for item in result["cases"])
 
 
 def test_verify_mock_echo_fails() -> None:

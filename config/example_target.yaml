@@ -1,9 +1,18 @@
 target:
-  name: mock://echo
+  name: ncd-guideline-tutor
   attestation: "I own this system or have written permission to test it."
-  type: mock
+  type: http
+  base_url: https://api.example.com
+  path: /api/chat
+  method: POST
+  body_template: '{"question": "{prompt}", "history": []}'
+  headers:
+    Authorization: "Bearer {API_KEY}"
+    Content-Type: application/json
+  timeout: 45.0
 options:
   k: 1
   judge_enabled: false
   layers:
     - injection
+    - exfiltration

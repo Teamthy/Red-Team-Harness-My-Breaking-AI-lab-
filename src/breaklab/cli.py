@@ -1,34 +1,111 @@
 from __future__ import annotations
 
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Any
 
 import typer
+import yaml
 from rich.console import Console
 from rich.table import Table
 
+from .artifacts import ArtifactWriter
 from .battery import Battery
-from .targets.mock_target import MockEchoTarget
+from .config import RunConfig, TargetConfig, load_run_config
+from .reporting.diff import _load_run_file, render_diff_report
+from .reporting.markdown import render_markdown_report
+from .results import CaseResult, RunResult
+from .targets.http_target import HTTPTarget
+from .targets.mock_target import BrokenMockTarget, FixedMockTarget, MockEchoTarget
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 
-def attack_target(target_name: str = "mock://echo", layer: str | None = None, k: int = 1) -> dict[str, object]:
-    if not target_name.startswith("mock://"):
-        raise typer.BadParameter(
-            f"Unsupported target '{target_name}'. Only mock:// targets are available in this Phase 0 scaffold."
-        )
+def _build_target(target: str | TargetConfig) -> Any:
+    if isinstance(target, TargetConfig):
+        if target.target_type == "http":
+            return HTTPTarget(
+                base_url=target.base_url or target.name,
+                path=target.path,
+                method=target.method,
+                body_template=target.body_template,
+                headers=target.headers,
+                timeout=target.timeout,
+                stream=target.stream,
+                response_mode=target.response_mode,
+                sse_options=target.sse,
+            )
+        target_name = target.name
+    else:
+        target_name = target
 
-    target = MockEchoTarget(target_name)
+    if target_name == "mock://echo":
+        return MockEchoTarget(target_name)
+    if target_name == "mock://broken":
+        return BrokenMockTarget(target_name)
+    if target_name == "mock://fixed":
+        return FixedMockTarget(target_name)
+    if target_name.startswith("mock://"):
+        return MockEchoTarget(target_name)
+    if target_name.startswith(("http://", "https://")):
+        return HTTPTarget(base_url=target_name)
+    raise typer.BadParameter(
+        f"Unsupported target '{target_name}'. Supported targets include mock://* and http(s)://* URLs."
+    )
+
+
+def attack_target(target_name: str = "mock://echo", layer: str | None = None, k: int = 1, config_path: str | None = None) -> dict[str, Any]:
+    config: RunConfig | None = None
+    if config_path is not None:
+        config = load_run_config(config_path)
+        target_name = config.target.base_url or config.target.name
+        if layer is None and config.layers:
+            layer = ",".join(config.layers)
+        if k == 1:
+            k = config.k
+
+    target = _build_target(config.target if config is not None else target_name)
     battery = Battery()
     if layer:
-        battery = Battery([case for case in battery.cases if case.layer == layer])
+        if "," in layer:
+            selected = {item.strip() for item in layer.split(",") if item.strip()}
+            battery = Battery([case for case in battery.cases if case.layer in selected])
+        else:
+            battery = Battery([case for case in battery.cases if case.layer == layer])
 
-    if k > 1:
-        # Phase 0 intentionally keeps single-attempt semantics.
-        # The same structure can later be extended to repeated sampling.
-        pass
+    run_result = battery.run(target)
+    cases = [
+        CaseResult(
+            case=item["case"],
+            layer=item["layer"],
+            passed=bool(item["passed"]),
+            rule=str(item["rule"]),
+            evidence=str(item["evidence"]),
+            severity=str(item["severity"]),
+            attempts=int(item["attempts"]),
+        )
+        for item in run_result["cases"]
+    ]
+    result = RunResult(target_name=target_name, cases=cases)
+    artifact_dir = Path("artifacts")
+    ArtifactWriter(artifact_dir).write_run(result)
+    return result.to_dict()
 
-    return battery.run(target)
+
+def verify_expectations(result: dict[str, Any], expectation_path: str | Path) -> bool:
+    content = Path(expectation_path).read_text(encoding="utf-8")
+    data = yaml.safe_load(content) or {}
+    expected = data.get("expected")
+    if expected is None:
+        raise typer.BadParameter(f"No 'expected' list found in {expectation_path}.")
+
+    result_map = {case["case"]: case["passed"] for case in result.get("cases", [])}
+    for item in expected:
+        case_name = item.get("case")
+        if case_name not in result_map:
+            raise typer.BadParameter(f"Expected case '{case_name}' was not in the run results.")
+        if result_map[case_name] != bool(item.get("pass")):
+            return False
+    return True
 
 
 @app.callback()
@@ -41,9 +118,10 @@ def attack(
     target: str = typer.Option("mock://echo", "--target", "-t", help="Target adapter to run."),
     layer: Annotated[str | None, typer.Option("--layer")] = None,
     k: int = typer.Option(1, "--k", min=1),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to a YAML run config file."),
 ) -> None:
     """Run the battery against a target."""
-    result = attack_target(target, layer=layer, k=k)
+    result = attack_target(target, layer=layer, k=k, config_path=config)
     console = Console()
     table = Table(title=f"Breaklab attack: {target}")
     table.add_column("Case", style="cyan")
@@ -66,30 +144,56 @@ def verify(
     target: str = typer.Option("mock://echo", "--target", "-t", help="Target adapter to verify."),
     layer: Annotated[str | None, typer.Option("--layer")] = None,
     k: int = typer.Option(1, "--k", min=1),
+    expected: str | None = typer.Option(None, "--expected", "-e", help="YAML file with expected pass/fail per case."),
+    report: bool = typer.Option(False, "--report", help="Emit a markdown report for the verification run."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to a YAML run config file."),
 ) -> None:
     """Verify the target passes the current battery and exit with a failing code on breakage."""
-    result = attack_target(target, layer=layer, k=k)
+    result = attack_target(target, layer=layer, k=k, config_path=config)
+
+    if expected is not None and not verify_expectations(result, expected):
+        typer.secho("Verification failed: expected results do not match the run.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
     if result["summary"]["failures"] > 0:
         typer.secho(
             f"Verification failed: {result['summary']['failures']} case(s) broke.",
             fg=typer.colors.RED,
-            err=True,
         )
         raise typer.Exit(code=1)
+
+    if report:
+        typer.echo(render_markdown_report(result))
 
     typer.secho("Verification passed: all checked cases held.", fg=typer.colors.GREEN)
 
 
 @app.command()
-def diff() -> None:
-    """Placeholder for before/after diff mode; to be implemented in later phases."""
-    typer.echo("Diff mode is not implemented in this Phase 0 skeleton.")
+def diff(
+    before: str = typer.Argument(..., help="Path to the pre-change run artifact or JSON result file."),
+    after: str = typer.Argument(..., help="Path to the post-change run artifact or JSON result file."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Optional path to write the markdown diff report."),
+) -> None:
+    """Render a before/after markdown diff report from two run artifacts."""
+    before_payload = _load_run_file(before)
+    after_payload = _load_run_file(after)
+    report = render_diff_report(before_payload, after_payload)
+
+    if output is not None:
+        target = Path(output)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(report, encoding="utf-8")
+
+    typer.echo(report)
 
 
 @app.command()
-def new_target() -> None:
-    """Placeholder for scaffolding a new target config."""
-    typer.echo("Target scaffolding is not implemented in this Phase 0 skeleton.")
+def new_target(path: str = typer.Option("config/example_target.yaml", "--path", "-p", help="Where to write the target config template.")) -> None:
+    """Scaffold a new target config YAML file."""
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(TargetConfig.template_yaml(), encoding="utf-8")
+    typer.secho(f"Target config scaffold written to {output}", fg=typer.colors.GREEN)
 
 
 if __name__ == "__main__":
