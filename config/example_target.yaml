@@ -1,0 +1,9 @@
+target:
+  name: mock://echo
+  attestation: "I own this system or have written permission to test it."
+  type: mock
+options:
+  k: 1
+  judge_enabled: false
+  layers:
+    - injection

@@ -1,0 +1,3 @@
+expected:
+  - case: prompt_leak
+    pass: false
