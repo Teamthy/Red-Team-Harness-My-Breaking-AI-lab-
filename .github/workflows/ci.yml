@@ -30,3 +30,10 @@ jobs:
 
       - name: Test
         run: pytest -q
+
+      - name: CLI smoke test
+        run: |
+          breaklab verify --target mock://fixed
+          breaklab verify --target python://breaklab.example_local_target:safe_echo_target
+          breaklab diff artifacts/20261012T013253Z-mock_broken.jsonl artifacts/20261012T013302Z-mock_fixed.jsonl -o /tmp/mock_diff.md
+          test -s /tmp/mock_diff.md

@@ -1,0 +1,31 @@
+target:
+  name: fastapi-chat-sse
+  attestation: "I own this system or have written permission to test it."
+  type: http
+  base_url: http://127.0.0.1:8000
+  path: /chat/stream
+  method: POST
+  stream: true
+  response_mode: sse
+  body_template: |
+    {
+      "question": "{prompt}",
+      "history": [],
+      "stream": true
+    }
+  headers:
+    Content-Type: application/json
+  timeout: 60.0
+  sse:
+    event_field: data
+    status_field: done
+    text_field: content
+options:
+  k: 1
+  judge_enabled: false
+  layers:
+    - injection
+    - exfiltration
+    - citation
+    - policy
+    - robustness

@@ -14,6 +14,7 @@ from .config import RunConfig, TargetConfig, load_run_config
 from .reporting.diff import _load_run_file, render_diff_report
 from .reporting.markdown import render_markdown_report
 from .results import CaseResult, RunResult
+from .scoring import compute_score
 from .targets.http_target import HTTPTarget
 from .targets.mock_target import BrokenMockTarget, FixedMockTarget, MockEchoTarget
 from .targets.python_target import PythonTarget
@@ -24,6 +25,39 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 def _attestation_path(base_dir: str | Path | None = None) -> Path:
     root = Path(base_dir) if base_dir is not None else Path.cwd()
     return root / ".breaklab" / "attestations.json"
+
+
+def _built_in_templates() -> dict[str, str]:
+    return {
+        "http": "openai_compatible_chat.yaml",
+        "json": "openai_compatible_chat.yaml",
+        "openai": "openai_compatible_chat.yaml",
+        "openai-compatible": "openai_compatible_chat.yaml",
+        "openai_compatible": "openai_compatible_chat.yaml",
+        "fastapi": "fastapi_chat.yaml",
+        "fastapi-json": "fastapi_chat.yaml",
+        "fastapi_json": "fastapi_chat.yaml",
+        "sse": "fastapi_sse_chat.yaml",
+        "fastapi-sse": "fastapi_sse_chat.yaml",
+        "fastapi_sse": "fastapi_sse_chat.yaml",
+    }
+
+
+def _load_template_contents(template_name: str | None) -> str | None:
+    if template_name is None:
+        return None
+    normalized = template_name.strip().lower().replace("-", "_")
+    selected = _built_in_templates().get(normalized)
+    if selected is None:
+        raise typer.BadParameter(
+            f"Unknown template '{template_name}'. Available templates: {', '.join(sorted(_built_in_templates()))}."
+        )
+
+    repo_root = Path(__file__).resolve().parents[2]
+    template_path = repo_root / "config" / "target_templates" / selected
+    if not template_path.exists():
+        raise typer.BadParameter(f"Template '{template_name}' is missing from the bundled templates directory.")
+    return template_path.read_text(encoding="utf-8")
 
 
 def _load_attestations(base_dir: str | Path | None = None) -> dict[str, str]:
@@ -197,8 +231,9 @@ def attack(
         table.add_row(item["case"], item["layer"], status, item["rule"])
 
     console.print(table)
+    score = compute_score(result)
     console.print(
-        f"Summary: {result['summary']['passes']} pass, {result['summary']['failures']} fail"
+        f"Summary: {result['summary']['passes']} pass, {result['summary']['failures']} fail | weighted score: {score:.2f}/100"
     )
 
 
@@ -253,12 +288,41 @@ def diff(
 
 
 @app.command()
-def new_target(path: str = typer.Option("config/example_target.yaml", "--path", "-p", help="Where to write the target config template.")) -> None:
-    """Scaffold a new target config YAML file."""
+def score(
+    artifact: str = typer.Argument(..., help="Path to a JSON or JSONL run artifact."),
+) -> None:
+    """Load a run artifact and print the weighted safety score."""
+    payload = _load_run_file(artifact)
+    value = compute_score(payload)
+    typer.secho(f"Weighted score: {value:.6f}/100", fg=typer.colors.GREEN)
+
+
+@app.command()
+def new_target(
+    path: str = typer.Option("config/example_target.yaml", "--path", "-p", help="Where to write the target config template."),
+    template: str | None = typer.Option(None, "--template", "-t", help="Built-in target template to scaffold (http, fastapi, fastapi-sse, etc.)."),
+    list_templates: bool = typer.Option(False, "--list-templates", help="List the built-in target templates available for scaffolding."),
+) -> None:
+    """Scaffold a new target config YAML file or list the supported templates."""
+    if list_templates:
+        names = [
+            "openai-compatible",
+            "fastapi",
+            "fastapi-sse",
+        ]
+        typer.secho("Available built-in target templates:", fg=typer.colors.GREEN)
+        for name in names:
+            typer.echo(f"- {name}")
+        return
+
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(TargetConfig.template_yaml(), encoding="utf-8")
-    typer.secho(f"Target config scaffold written to {output}", fg=typer.colors.GREEN)
+    content = _load_template_contents(template) or TargetConfig.template_yaml()
+    output.write_text(content, encoding="utf-8")
+    if template:
+        typer.secho(f"Target config scaffold written to {output} using template '{template}'.", fg=typer.colors.GREEN)
+    else:
+        typer.secho(f"Target config scaffold written to {output}", fg=typer.colors.GREEN)
 
 
 @app.command()

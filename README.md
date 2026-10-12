@@ -45,10 +45,10 @@ Generate a markdown report:
 breaklab verify --target mock://fixed --report
 ```
 
-Compare two result artifacts:
+Compare a broken run to a fixed run and emit a client-ready markdown diff:
 
 ```bash
-breaklab diff artifacts/run_*.json artifacts/run_*.json -o diff.md
+breaklab diff artifacts/20261012T013253Z-mock_broken.jsonl artifacts/20261012T013302Z-mock_fixed.jsonl -o examples/mock_diff_report.md
 ```
 
 ## Real target configuration
@@ -99,6 +99,22 @@ The project ships with deterministic mock targets that are useful for local deve
 
 These are the regression anchors for the harness itself.
 
+## Target templates
+
+The project now includes a small library of real-world target configs for common app patterns:
+
+- `config/target_templates/openai_compatible_chat.yaml` — OpenAI-compatible JSON chat API
+- `config/target_templates/fastapi_chat.yaml` — local FastAPI JSON chat endpoint
+- `config/target_templates/fastapi_sse_chat.yaml` — local FastAPI SSE streaming endpoint
+
+Use them as a starting point, then replace the example `base_url`, auth values, and routes with the target you own or have explicit permission to test.
+
+```bash
+breaklab verify --config config/target_templates/openai_compatible_chat.yaml
+breaklab verify --config config/target_templates/fastapi_chat.yaml
+breaklab verify --config config/target_templates/fastapi_sse_chat.yaml --report
+```
+
 ## Sample artifacts
 
 Two example markdown reports are committed under the `examples/` directory:
@@ -107,6 +123,23 @@ Two example markdown reports are committed under the `examples/` directory:
 - `examples/sample_report_fixed.md`
 
 These demonstrate the before/after story for a broken target and the repaired target.
+
+## Release readiness
+
+The project is now structured for a clean public handoff:
+
+- version metadata is already present in `pyproject.toml`
+- the repo has a working CI smoke path in `.github/workflows/ci.yml`
+- the harness already has a documented mock and Python-based regression lane
+- the diff report and sample artifacts are committed for client-facing review
+
+See [DOCS/release-readiness.md](DOCS/release-readiness.md) for the full release checklist.
+
+## Live validation and public release
+
+When you have a real target ready, use the external validation checklist in [DOCS/live-validation.md](DOCS/live-validation.md) and the release flow in [DOCS/release-readiness.md](DOCS/release-readiness.md).
+
+This keeps the external validation path separate from the deterministic CI path while still giving you a concrete public-release checklist.
 
 ## Project status
 

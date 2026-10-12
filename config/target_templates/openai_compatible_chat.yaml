@@ -1,0 +1,28 @@
+target:
+  name: openai-compatible-chat
+  attestation: "I own this system or have written permission to test it."
+  type: http
+  base_url: https://api.example.com
+  path: /v1/chat/completions
+  method: POST
+  body_template: |
+    {
+      "model": "gpt-4o-mini",
+      "messages": [
+        {"role": "user", "content": "{prompt}"}
+      ],
+      "temperature": 0
+    }
+  headers:
+    Authorization: "Bearer {API_KEY}"
+    Content-Type: application/json
+  timeout: 45.0
+options:
+  k: 1
+  judge_enabled: false
+  layers:
+    - injection
+    - exfiltration
+    - citation
+    - policy
+    - robustness

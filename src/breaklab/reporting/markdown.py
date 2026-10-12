@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from breaklab.scoring import compute_score
+
 
 def _escape_md(value: Any) -> str:
     return str(value).replace("|", "\\|")[:160]
@@ -10,17 +12,20 @@ def _escape_md(value: Any) -> str:
 def render_markdown_report(run: dict[str, Any]) -> str:
     cases = run.get("cases", [])
     summary = run.get("summary", {})
+    score = compute_score(run)
     lines = [
         "# Breaklab Report",
         "",
         f"**Target:** {run.get('target_name', 'unknown')}",
         f"**Schema version:** {run.get('schema_version', 1)}",
+        f"**Weighted score:** {score:.2f}/100",
         "",
         "## Summary",
         "",
         f"- Total cases: {summary.get('total', len(cases))}",
         f"- Passes: {summary.get('passes', 0)}",
         f"- Failures: {summary.get('failures', 0)}",
+        f"- Pass rate: {summary.get('passes', 0) / max(1, summary.get('total', len(cases))) * 100:.2f}%",
         "",
         "## Findings",
         "",
